@@ -19,11 +19,14 @@ from matplotlib import font_manager as fm
 from scipy.interpolate import interp1d, pchip_interpolate
 import numpy as np
 from bs4 import BeautifulSoup
+import os
 Url="https://scoresaber.com/global"
 scurl = "https://scoresaber.com/u/"
 newsclink = 'https://new.scoresaber.com/api/player/'
-path ="D:/beatsaber/PP_text/" 
-font_loc = "C:/Windows/Fonts/gulim.ttc"
+
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+path =os.path.join(DIR_PATH, "data/PP_text/") 
+font_loc = "/usr/share/fonts/gulim.ttc"
 font_prop = fm.FontProperties(fname = font_loc, size = 12).get_name()
 #font_prop = fm.FontProperties(family='Arial Unicode MS', size=12).get_name()
 history_overflow = -1
@@ -36,7 +39,7 @@ engdataformet = ["이름","지금 안씀","url"," GlobalRank: "," PP: "," AvgRan
 
 did_sc = {}				# 딕셔너리 선언  디스코드 아이디 : 슼세 
 #피클 이용해 우저데이터 가져오기
-f = open("userdata.bin",'rb')
+f = open("./userdata.bin",'rb')
 did_sc = pickle.load(f)
 f.close()
 
@@ -51,7 +54,7 @@ f.close()
 def regist(did, address):
 	if validcheck(address) :
 		did_sc[did] = address
-		f = open("userdata.bin",'wb')
+		f = open("./userdata.bin",'wb')
 		pickle.dump(did_sc,f)
 		f.close()
 		return True
