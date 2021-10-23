@@ -13,10 +13,10 @@
 '''
 from bot_command_set import *
 from discord.ext import commands
-import discord, asyncio
+import discord, asyncio, re
 #from selenium import webdriver
 
-
+SCORESABER_USER_ID_MIN = 10 ##스코어세이버 주소 10자리는 넘겠지?
 game = discord.Game("오전 5시30~40분을 제외하고 작동")
 bot = commands.Bot(command_prefix = '!', status=discord.Status.online, activity=game, help_command = None)
 number = 0
@@ -98,7 +98,7 @@ async def oi(ctx, player=""):
 async def 정보등록(ctx): 
     try:
     	sc = ctx.message.content.split()[-1]
-    	sc = sc.split('u/')[-1]
+    	sc = re.findall(f'\d{{{SCORESABER_USER_ID_MIN},}}', sc)[0]
     	if diccheck(str(ctx.author.id)):
     		await ctx.send(f'`{ctx.author}님은 이미 등록되어있습니다. 이번에 입력하신 정보로 재등록합니다`')
     	if regist(str(ctx.author.id),sc):
@@ -106,25 +106,25 @@ async def 정보등록(ctx):
     	else:
     		await ctx.send('등록에 실패했습니다 올바른 주소를 입력해주세요')
     except:
-    	await message.channel.send('입력을 확인해주세요')
+    	await ctx.send('입력을 확인해주세요')
 
 async def 타_등록(ctx):
     try:
     	did = ctx.message.content.split()[-2]
     	sc = ctx.message.content.split()[-1]
-    	sc = sc.split('u/')[-1]
+    	sc = re.findall(f'\d{{{SCORESABER_USER_ID_MIN},}}', sc)[0]
     	if diccheck(str(did)):
     		await ctx.send(f'`{did}님은 이미 등록되어있습니다. 이번에 입력하신 정보로 재등록합니다.`')    		
     	if regist(str(did),sc):
-    		await ctx.channel.send("성공적으로 등록되었습니다")
+    		await ctx.send("성공적으로 등록되었습니다")
     	else:
-    		await ctx.channel.send("등록에 실패했습니다 올바른 주소를 입력해주세요")
+    		await ctx.send("등록에 실패했습니다 올바른 주소를 입력해주세요")
     except:
-    	await ctx.channel.send("입력을 확인해주세요")
+    	await ctx.send("입력을 확인해주세요")
 
 async def 추가하기(ctx, link):
     if link != None:
-    	link = link.split('u/')[-1]
+    	link = re.findall(f'\d{{{SCORESABER_USER_ID_MIN},}}', link)[0]
     	username = validcheck(link)
     	if(username!= False):
     		dupcheck = open('Added_User_List.txt', 'r')
