@@ -39,7 +39,7 @@ engdataformet = ["이름","지금 안씀","url"," GlobalRank: "," PP: "," AvgRan
 
 did_sc = {}				# 딕셔너리 선언  디스코드 아이디 : 슼세 
 #피클 이용해 우저데이터 가져오기
-f = open("./userdata.bin",'rb')
+f = open(os.path.join(DIR_PATH, "userdata.bin") ,'rb')
 did_sc = pickle.load(f)
 f.close()
 
@@ -54,7 +54,7 @@ f.close()
 def regist(did, address):
 	if validcheck(address) :
 		did_sc[did] = address
-		f = open("./userdata.bin",'wb')
+		f = open(os.path.join(DIR_PATH, "userdata.bin") ,'wb')
 		pickle.dump(did_sc,f)
 		f.close()
 		return True
