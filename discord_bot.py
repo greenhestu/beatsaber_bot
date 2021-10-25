@@ -13,7 +13,7 @@
 '''
 from bot_command_set import *
 from discord.ext import commands
-import discord, asyncio, re
+import discord, asyncio, re, os
 #from selenium import webdriver
 
 SCORESABER_USER_ID_MIN = 10 ##스코어세이버 주소 10자리는 넘겠지?
@@ -21,7 +21,9 @@ game = discord.Game("오전 5시30~40분을 제외하고 작동")
 bot = commands.Bot(command_prefix = '!', status=discord.Status.online, activity=game, help_command = None)
 number = 0
 ENCODING = 'utf-8'
-with open('token.txt','r', encoding=ENCODING) as text:
+
+DIR_PATH = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(DIR_PATH,'token.txt'),'r', encoding=ENCODING) as text:
     TOKEN = text.read()
 print(TOKEN)
 
