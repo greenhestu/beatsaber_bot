@@ -24,7 +24,7 @@ ENCODING = 'utf-8'
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(DIR_PATH,'token.txt'),'r', encoding=ENCODING) as text:
-    TOKEN = text.read()
+    TOKEN = text.readlines()[0].split("#")[0] #첫번째 줄 #빼고 token으로 사용
 print(TOKEN)
 
 #------------------------------------------------------------------------------------------------
