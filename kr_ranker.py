@@ -45,8 +45,9 @@ def page_declare(address, index):
 				return request_retry(address, maxRetryNum-1)
 	
 	json = request_retry(address, 3)
+	print(json)
 
-	for i, data in enumerate(json):
+	for i, data in enumerate(json["players"]):
 		rank[index][i+1].id = data['id']
 		rank[index][i+1].name = data['name']
 		rank[index][i+1].pp = data['pp']
@@ -54,6 +55,12 @@ def page_declare(address, index):
 
 def writing(index):
 	for i in range(1,51):
+		#오늘 랭킹이 기록되어있으면 패스
+		with open(path+"PP_text/"+rank[index][i].id+".txt", 'r') as DupChecker:
+			textline = DupChecker.readlines()
+			if(textline[-1].startswith('{}-{}-{}'.format(date.year, date.month, date.day))):
+				print(f'{rank[index][i].name} already wrote')
+				continue
 		#기록용
 		playerfile = open(path+"PP_text/"+rank[index][i].id+".txt", 'a', encoding=ENCODING, errors=ERRORS)
 		#테스트용

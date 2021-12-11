@@ -4,3 +4,4 @@ discord bot for beatsaber
 
 ## TODO
 / 명령어 만들기 
+log메시지 파일로 보관하기
