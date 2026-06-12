@@ -4,3 +4,5 @@ graph.png
 nohup.out
 __pycache__
 /data
+recommend/*/data/
+recommend/*/__pycache__/

@@ -96,6 +96,18 @@ async def 랭킹(ctx, country = None):
 async def oi(ctx, player=""):
 	await 타_정보(ctx, player)
 
+@bot.command(aliases=['REC','곡추천']) # 곡추천 (ScoreSaber)
+async def rec(ctx, link = None, num = '8'):
+	await 곡_추천(ctx, link, num)
+
+@bot.command(aliases=['BLREC','블곡추천','bl곡추천']) # 곡추천 (BeatLeader)
+async def blrec(ctx, link = None, num = '8'):
+	await 블_곡_추천(ctx, link, num)
+
+@bot.command(aliases=['UREC','유저추천']) # 유저추천 (ScoreSaber)
+async def urec(ctx, link = None, num = '8'):
+	await 유저_추천(ctx, link, num)
+
 #------------------------------------------------------------------------------------------------
 async def 정보등록(ctx): 
     try:
@@ -285,6 +297,66 @@ async def 비교하기(ctx):
     	else:
     		await ctx.send("입력을 확인해주세요")
 
+#------------------------------------------------------------------------------------------------
+# 곡/유저 추천 (recommend/ — 리더보드 topology 기반, 자세한 건 recommend/README.md)
+RECOMMEND_DIR = os.path.join(DIR_PATH, 'recommend')
+
+async def 추천실행(tool, target, num):
+    '''recommend/<tool>/similar.py를 실행해 출력을 받아온다 (로컬 DB만 읽음, API 호출 없음)'''
+    script = os.path.join(RECOMMEND_DIR, tool, 'similar.py')
+    proc = await asyncio.create_subprocess_exec(
+        'python3', script, str(target), str(num),
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    out, _ = await proc.communicate()
+    return out.decode('utf-8', 'ignore').strip()
+
+async def 추천응답(ctx, tool, target, num):
+    if not str(num).isdecimal():
+    	await ctx.send("개수는 숫자로 입력해주세요")
+    	return
+    num = min(int(num), 15) #discord 2000자 제한
+    answer = await 추천실행(tool, target, num)
+    if not answer:
+    	await ctx.send("추천 데이터가 없습니다. 관리자에게 문의해주세요 (recommend/ 데이터 수집 필요)")
+    	return
+    if len(answer) > 1900:
+    	answer = answer[:1900]+"\n...(생략)"
+    await ctx.send("```\n"+answer+"\n```")
+
+async def 곡_추천(ctx, link, num):
+    if link == None:
+    	await ctx.send("`!곡추천 [스코어세이버 리더보드 주소|id] [개수]` 형식으로 입력해주세요")
+    	return
+    found = re.findall(r'\d+', link)
+    if not found:
+    	await ctx.send("리더보드 id를 찾을 수 없습니다. 입력을 확인해주세요")
+    	return
+    await 추천응답(ctx, 'ss_maps', found[-1], num) #map/45827/difficulty/313895 처럼 마지막 숫자가 리더보드 id
+
+async def 블_곡_추천(ctx, link, num):
+    if link == None:
+    	await ctx.send("`!블곡추천 [비트리더 리더보드 주소|id] [개수]` 형식으로 입력해주세요")
+    	return
+    m = re.search(r'global/([0-9a-fx]+)', link)
+    target = m.group(1) if m else link.rstrip('/').split('/')[-1]
+    await 추천응답(ctx, 'bl_maps', target, num)
+
+async def 유저_추천(ctx, link, num):
+    if link == None: #입력 없으면 등록된 내 계정 사용
+    	discordid = str(ctx.author.id)
+    	if not diccheck(discordid):
+    		await ctx.send("등록을 먼저 해주세요\n`!등록 [스코어세이버 주소]를 이용해 등록할 수 있습니다`")
+    		return
+    	target = did_sc[discordid]
+    else:
+    	found = re.findall(f'\d{{{SCORESABER_USER_ID_MIN},}}', link)
+    	if not found:
+    		await ctx.send("스코어세이버 id를 찾을 수 없습니다. 입력을 확인해주세요")
+    		return
+    	target = found[0]
+    await 추천응답(ctx, 'ss_users', target, num)
+
+#------------------------------------------------------------------------------------------------
 async def 검색하기(ctx):
     try:
     	await ctx.send("검색 중입니다. 잠시만 기다려주세요")
