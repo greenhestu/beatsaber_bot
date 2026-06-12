@@ -27,6 +27,8 @@ newsclink = 'https://new.scoresaber.com/api/player/'
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 path =os.path.join(DIR_PATH, "data/PP_text/") 
 font_loc = "/usr/share/fonts/gulim.ttc"
+if not os.path.exists(font_loc): #시스템에 없으면 레포에 포함된 폰트 사용
+	font_loc = os.path.join(DIR_PATH, "gulim.ttc")
 font_prop = fm.FontProperties(fname = font_loc, size = 12).get_name()
 #font_prop = fm.FontProperties(family='Arial Unicode MS', size=12).get_name()
 history_overflow = -1

@@ -7,7 +7,17 @@ Beat Saber 플레이어를 위한 한국어 Discord 봇.
 조회하고, 등록된 유저의 PP 변동을 **매일 기록**해 전적 조회·그래프·유저 간
 비교 기능을 제공한다.
 
-## 주요 기능 (명령어)
+## 슬래시 커맨드 (추천 인터페이스)
+
+discord.py 2.x 기반. 입력하면 Discord가 파라미터 힌트를 띄워주고,
+세부 기능은 결과 메시지의 **버튼**으로 조작한다.
+
+| 명령어 | 설명 | 버튼 |
+|---|---|---|
+| `/info [player]` | ScoreSaber 프로필 embed (비우면 `!등록`된 내 계정) | 📜 History · 📈 Graph · 🌾 Farm picks |
+| `/recommend [map] [count]` | `map`에 ScoreSaber/BeatLeader 리더보드 주소·id를 주면 유사 곡 추천 (플랫폼 자동 판별), 비우면 내 계정 기준 유사 유저+farm 추천 | 📥 Playlist(.bplist) · ➕ More |
+
+## prefix 명령어 (기존)
 
 접두사는 `!`. 모든 명령은 한글/영문 축약형을 함께 지원한다.
 
@@ -30,7 +40,8 @@ Beat Saber 플레이어를 위한 한국어 Discord 봇.
 ## 구조
 
 ```
-discord_bot.py      # 엔트리포인트 — 봇 명령 정의·입력 파싱·응답 (discord.py 1.7)
+discord_bot.py      # 엔트리포인트 — prefix 명령 정의·입력 파싱·응답 (discord.py 2.x)
+slash_commands.py   # /info, /recommend 슬래시 커맨드 + 버튼 UI (discord.ui.View)
 bot_command_set.py  # 명령 구현 — ScoreSaber API 조회, 전적 파일 읽기, matplotlib 그래프
 kr_ranker.py        # [일일 배치] 한국 랭킹 1~100위의 PP/순위를 기록
 added_user.py       # [일일 배치] !추가 로 등록된 유저(Added_User_List.txt)의 PP를 기록
@@ -54,10 +65,11 @@ history.txt         # 전적 기록 파일 예시
 ## 설치 및 실행
 
 ```bash
-pip install discord.py==1.7.3 requests beautifulsoup4 matplotlib scipy numpy
+pip install -r requirements.txt   # discord.py>=2.3, requests, bs4, matplotlib, scipy, numpy
 
 # 1. 봇 토큰: 레포 루트에 token.txt 생성, 첫 줄에 토큰 입력 (# 뒤는 주석으로 무시)
-# 2. 폰트: gulim.ttc를 /usr/share/fonts/에 복사 (그래프 한글용)
+#    개발자 포털에서 MESSAGE CONTENT INTENT 활성화 필요 (prefix 명령용)
+# 2. 폰트: 시스템에 gulim.ttc 없으면 레포에 포함된 파일을 자동 사용
 # 3. 데이터 디렉토리 생성
 mkdir -p data/PP_text
 
@@ -114,14 +126,14 @@ cd recommend/ss_users && python3 fetch.py                                     # 
   `new.scoresaber.com/api` 엔드포인트를 사용한다. 현재는
   `scoresaber.com/api`로 통합되었으므로 (`kr_ranker.py`는 이미 신버전 사용)
   동작하지 않으면 URL을 교체해야 한다.
-- `requirements.txt`는 운영 머신의 `pip freeze` 전체 덤프라 실제 필요한 패키지는
-  위 설치 명령의 6개뿐이다.
 - 한국/일본 유저에게는 한국어, 그 외에는 영어로 프로필을 출력한다.
+- 슬래시 커맨드는 봇 시작 시 자동 sync되며, 서버에 반영되기까지 최대 1시간
+  걸릴 수 있다 (Discord 캐시).
 
 ## TODO
 
-- `/` (슬래시) 명령어 지원
 - log 메시지 파일로 보관하기
+- prefix 명령들도 슬래시로 이전
 
 ## License
 

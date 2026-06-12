@@ -18,19 +18,28 @@ import discord, asyncio, re, os
 
 SCORESABER_USER_ID_MIN = 10 ##스코어세이버 주소 10자리는 넘겠지?
 game = discord.Game("오전 5시30~40분을 제외하고 작동")
-bot = commands.Bot(command_prefix = '!', status=discord.Status.online, activity=game, help_command = None)
+intents = discord.Intents.default()
+intents.message_content = True #discord.py 2.x: prefix 명령에 필요 (개발자 포털에서도 활성화)
+bot = commands.Bot(command_prefix = '!', status=discord.Status.online, activity=game, help_command = None, intents=intents)
 number = 0
 ENCODING = 'utf-8'
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(DIR_PATH,'token.txt'),'r', encoding=ENCODING) as text:
     TOKEN = text.readlines()[0].split("#")[0] #첫번째 줄 #빼고 token으로 사용
-print(TOKEN)
+
+import slash_commands
+slash_commands.setup(bot) # /info, /recommend (버튼 UI는 slash_commands.py)
 
 #------------------------------------------------------------------------------------------------
 
 @bot.event
 async def on_ready():
+    try:
+    	synced = await bot.tree.sync()
+    	print(f"slash commands synced: {len(synced)}")
+    except Exception as ex:
+    	print("slash sync failed:", ex)
     print("ready")
 
 #------------------------------------------------------------------------------------------------
