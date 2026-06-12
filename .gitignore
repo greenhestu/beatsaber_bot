@@ -6,3 +6,4 @@ __pycache__
 /data
 recommend/*/data/
 recommend/*/__pycache__/
+*.bplist

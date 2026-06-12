@@ -15,7 +15,9 @@ Similarity between two maps over their common players:
 
 Final ranking: 0.5*spearman_shrunk + 0.5*resid_shrunk (rbo shown for context).
 
-Usage: similar.py <leaderboard_id> [topN]
+Usage: similar.py <leaderboard_id> [topN] [--playlist=<path>]
+  --playlist writes the target + recommendations as a Beat Saber playlist
+  (.bplist JSON, PlaylistManager compatible).
 """
 import json
 import math
@@ -127,6 +129,26 @@ def pearson(xs, ys):
     return sxy / (sx * sy) if sx > 0 and sy > 0 else 0.0
 
 
+def write_playlist(path, title, lb_ids):
+    cat = {l["id"]: l for l in json.load(open(CATALOG_FILE))}
+    songs = []
+    for lb in lb_ids:
+        # sqlite turns all-numeric BL ids into int — fall back to str key
+        c = cat.get(lb) or cat.get(str(lb))
+        if not c or not c.get("hash"):
+            continue
+        d = c["diff"]
+        diff_name = d.split("_")[1] if d.startswith("_") else d
+        songs.append({
+            "hash": c["hash"],
+            "songName": f'{c["song"]} - {c["author"]}',
+            "difficulties": [{"characteristic": "Standard", "name": diff_name}],
+        })
+    with open(path, "w") as f:
+        json.dump({"playlistTitle": title, "playlistAuthor": "beatsaber_bot",
+                   "songs": songs, "image": ""}, f)
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     target = args[0]
@@ -194,6 +216,12 @@ def main():
     for score, sp, rs, rb_, nc, lb in out[:top_n]:
         print(f"{score:6.3f} {sp:6.3f} {rs:6.3f} {rb_:5.3f} {nc:4d}  {fmt(lb)}  "
               f"{url(lb)}")
+
+    pl = next((a for a in sys.argv if a.startswith("--playlist=")), None)
+    if pl:
+        song = meta[target][0]
+        write_playlist(pl.split("=", 1)[1], f"Similar to {song}",
+                       [target] + [t[5] for t in out[:top_n]])
 
 
 if __name__ == "__main__":

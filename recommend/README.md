@@ -13,6 +13,7 @@ cd ss_maps
 python3 fetch.py catalog   # ★7.13+ 카탈로그 (180 calls)
 python3 fetch.py scores    # 상위 240 스코어 수집 (~19.5k calls, ~80분)
 python3 similar.py 313895 20            # DONUT HOLE과 유사한 맵 top 20
+python3 similar.py 313895 20 --playlist=out.bplist  # 결과를 플레이리스트로 저장
 python3 similar.py <id> <N> --rebuild   # jsonl에서 topology.db 재빌드
 ```
 

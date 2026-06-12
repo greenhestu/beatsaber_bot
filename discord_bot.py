@@ -301,12 +301,14 @@ async def 비교하기(ctx):
 # 곡/유저 추천 (recommend/ — 리더보드 topology 기반, 자세한 건 recommend/README.md)
 RECOMMEND_DIR = os.path.join(DIR_PATH, 'recommend')
 
-async def 추천실행(tool, target, num):
+async def 추천실행(tool, target, num, playlist_path=None):
     '''recommend/<tool>/similar.py를 실행해 출력을 받아온다 (로컬 DB만 읽음, API 호출 없음)'''
     script = os.path.join(RECOMMEND_DIR, tool, 'similar.py')
+    cmd = ['python3', script, str(target), str(num)]
+    if playlist_path != None:
+    	cmd.append('--playlist='+playlist_path)
     proc = await asyncio.create_subprocess_exec(
-        'python3', script, str(target), str(num),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+        *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     out, _ = await proc.communicate()
     return out.decode('utf-8', 'ignore').strip()
 
@@ -315,13 +317,17 @@ async def 추천응답(ctx, tool, target, num):
     	await ctx.send("개수는 숫자로 입력해주세요")
     	return
     num = min(int(num), 15) #discord 2000자 제한
-    answer = await 추천실행(tool, target, num)
+    playlist_path = os.path.join(RECOMMEND_DIR, f'pl_{tool}_{target}.bplist')
+    answer = await 추천실행(tool, target, num, playlist_path)
     if not answer:
     	await ctx.send("추천 데이터가 없습니다. 관리자에게 문의해주세요 (recommend/ 데이터 수집 필요)")
     	return
     if len(answer) > 1900:
     	answer = answer[:1900]+"\n...(생략)"
     await ctx.send("```\n"+answer+"\n```")
+    if os.path.exists(playlist_path): #추천 결과를 게임에서 바로 쓸 수 있는 플레이리스트로 첨부
+    	await ctx.send(file = discord.File(playlist_path, filename = f'similar_{target}.bplist'))
+    	os.remove(playlist_path)
 
 async def 곡_추천(ctx, link, num):
     if link == None:

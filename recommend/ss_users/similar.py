@@ -8,7 +8,10 @@ I look at to decide what to play next".
 Similarity = cosine over pp-weighted song vectors (each user's top-100 maps,
 weighted by their pp on the map), plus common-map count.
 
-Usage: similar.py <player_id | player_name> [topN]
+Usage: similar.py <player_id | player_name> [topN] [--playlist=<path>]
+  --playlist writes farm candidates (top-3 similar users' high-pp maps the
+  target hasn't played) as a Beat Saber playlist (.bplist). Song hashes are
+  looked up from ../ss_maps/data/leaderboards.json.
 """
 import json
 import math
@@ -50,9 +53,34 @@ def cosine(a, b):
     return dot / (na * nb), len(common)
 
 
+def write_playlist(path, title, lb_ids, songs):
+    cat_file = os.path.join(os.path.dirname(DATA), "..", "ss_maps", "data",
+                            "leaderboards.json")
+    try:
+        cat = {l["id"]: l for l in json.load(open(cat_file))}
+    except FileNotFoundError:
+        cat = {}
+    entries = []
+    for lb in lb_ids:
+        c = cat.get(lb)
+        if not c or not c.get("hash"):
+            continue
+        d = c["diff"]
+        diff_name = d.split("_")[1] if d.startswith("_") else d
+        entries.append({
+            "hash": c["hash"],
+            "songName": f'{c["song"]} - {c["author"]}',
+            "difficulties": [{"characteristic": "Standard", "name": diff_name}],
+        })
+    with open(path, "w") as f:
+        json.dump({"playlistTitle": title, "playlistAuthor": "beatsaber_bot",
+                   "songs": entries, "image": ""}, f)
+
+
 def main():
-    query = sys.argv[1]
-    top_n = int(sys.argv[2]) if len(sys.argv) > 2 else 15
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    query = args[0]
+    top_n = int(args[1]) if len(args) > 1 else 15
 
     players, vecs, songs = load()
 
@@ -104,6 +132,18 @@ def main():
             song, author, stars = songs[lb]
             print(f"  {pp:6.1f}pp  {stars:5.2f}* {song} ({author})  "
                   f"https://scoresaber.com/leaderboard/{lb}")
+
+        pl = next((a for a in sys.argv if a.startswith("--playlist=")), None)
+        if pl:
+            # farm picks: union of top-3 similar users' unplayed maps, by pp
+            best = {}
+            for _, _, q in out[:3]:
+                for lb, w in vecs[q["id"]].items():
+                    if lb not in tv:
+                        best[lb] = max(best.get(lb, 0), w)
+            picks = sorted(best, key=lambda lb: -best[lb])[:20]
+            write_playlist(pl.split("=", 1)[1],
+                           f"Farm picks for {target['name']}", picks, songs)
 
 
 if __name__ == "__main__":
