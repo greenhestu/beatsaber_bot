@@ -8,7 +8,7 @@ date = datetime.now() #날짜
 dir_path = os.path.dirname(os.path.abspath(__file__))
 path = dir_path#os.path.join(dir_path, "../")  #전적 텍스트 파일 경로
 path_pp = os.path.join(dir_path, "data/")
-link = 'https://new.scoresaber.com/api/player/'
+link = 'https://scoresaber.com/api/player/'
 
 added_user = open(os.path.join(dir_path, "Added_User_List.txt"), 'r')
 Url = added_user.readlines()
@@ -43,18 +43,24 @@ def reading(url):
 
 	playerinfo[4] = url
 
-	source = requests.get(link+url+"/basic")
-	soup = BeautifulSoup(source.text.encode('utf-8', 'replace'), 'html.parser')
-	strsoup = str(soup)
-	element_list = strsoup.split(':')
-	if(len(element_list) < 4):
+	try:
+		source = requests.get(link+url+"/basic", timeout=10)
+		if source.status_code != 200:
+			print('wrong address')
+			return False
+		data = source.json()
+	except Exception as ex:
+		print(ex)
 		print('wrong address')
 		return False
-	name = element_list[3].split(',')[0].strip().strip('"')
+	name = data.get('name')
+	if not name:
+		print('wrong address')
+		return False
 	playerinfo[0] = name
-	rank = element_list[6].split(',')[0].strip()
+	rank = str(data.get('rank', ''))
 	playerinfo[2] = rank
-	pp = element_list[7].split(',')[0].strip()
+	pp = str(data.get('pp', ''))
 	playerinfo[3] = pp
 	print(playerinfo)
 

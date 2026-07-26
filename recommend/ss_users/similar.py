@@ -17,6 +17,8 @@ import json
 import math
 import os
 import sys
+import urllib.error
+import urllib.request
 from collections import defaultdict
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
@@ -31,16 +33,30 @@ WEIGHT_DECAY = 0.965
 
 def load():
     players = {p["id"]: p for p in json.load(open(PLAYERS_FILE))}
-    vecs, songs = {}, {}
+    vecs, raw_scores, songs = {}, {}, {}
     with open(SCORES_FILE) as f:
         for line in f:
             rec = json.loads(line)
-            v = {}
+            v, raw = {}, {}
             for i, s in enumerate(rec["scores"]):  # scores are pp-desc sorted
                 v[s["lb_id"]] = s["pp"] * (WEIGHT_DECAY ** i)
+                raw[s["lb_id"]] = s["pp"]
                 songs[s["lb_id"]] = (s["song"], s["author"], s["stars"])
             vecs[rec["_player"]] = v
-    return players, vecs, songs
+            raw_scores[rec["_player"]] = raw
+    return players, vecs, raw_scores, songs
+
+
+def fetch_plus_one_pp(player_id):
+    url = f"https://scoresaber.com/api/v2/players/{player_id}"
+    req = urllib.request.Request(url, headers={"User-Agent": "beatsaber_bot/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+        value = (data.get("stats") or {}).get("plusOnePP")
+        return float(value) if value is not None else None
+    except (OSError, ValueError, TypeError, urllib.error.HTTPError):
+        return None
 
 
 def cosine(a, b):
@@ -82,7 +98,7 @@ def main():
     query = args[0]
     top_n = int(args[1]) if len(args) > 1 else 15
 
-    players, vecs, songs = load()
+    players, vecs, raw_scores, songs = load()
 
     # resolve target by id, else by (case-insensitive) name
     target = players.get(query)
@@ -98,9 +114,13 @@ def main():
     tv = vecs.get(target["id"])
     if not tv:
         sys.exit(f"no scores fetched for {target['name']}")
+    plus_one_pp = fetch_plus_one_pp(target["id"])
+    if plus_one_pp is None:
+        sys.exit("could not retrieve the target player's +1PP threshold")
 
     print(f"\nTarget: #{target['rank']} {target['name']} ({target['country']}) "
           f"{target['pp']:.0f}pp — comparing against higher-pp players\n")
+    print(f"ScoreSaber +1PP 기준: {plus_one_pp:.2f} raw pp 초과\n")
 
     out = []
     for pid, v in vecs.items():
@@ -116,32 +136,46 @@ def main():
     print(f"{'cos':>6} {'common':>6} {'rank':>6} {'pp':>8}  player")
     for sim, nc, p in out[:top_n]:
         print(f"{sim:6.3f} {nc:6d} {p['rank']:6d} {p['pp']:8.0f}  "
-              f"{p['name']} ({p['country']})  "
-              f"https://scoresaber.com/u/{p['id']}")
+              f"{p['name']} ({p['country']})")
 
     if out:
-        # what the most similar higher player has that the target hasn't played
-        sim, nc, p = out[0]
-        pv = vecs[p["id"]]
-        gaps = sorted((pp for lb, pp in pv.items() if lb not in tv),
-                      reverse=True)
-        new_maps = [(lb, pv[lb]) for lb in pv if lb not in tv]
-        new_maps.sort(key=lambda x: -x[1])
-        print(f"\n{p['name']}이(가) 플레이했지만 타깃은 안 한 상위 pp 맵:")
-        for lb, pp in new_maps[:8]:
+        compared = out[:top_n]
+        occurrences = defaultdict(list)
+        disqualified = set()
+        for _, _, player in compared:
+            for lb, raw_pp in raw_scores[player["id"]].items():
+                if lb in tv:
+                    continue
+                if raw_pp <= plus_one_pp:
+                    disqualified.add(lb)
+                else:
+                    occurrences[lb].append((player["name"], raw_pp))
+
+        candidates = [
+            (lb, values)
+            for lb, values in occurrences.items()
+            if len(values) >= 2 and lb not in disqualified
+        ]
+        candidates.sort(key=lambda item: (
+            -len(item[1]),
+            -min(pp for _, pp in item[1]),
+            -sum(pp for _, pp in item[1]) / len(item[1]),
+        ))
+
+        print(f"\n유사 유저 {len(compared)}명에게 반복 등장하고 모두 "
+              f"{plus_one_pp:.2f}pp를 넘긴 맵:")
+        if not candidates:
+            print("  조건을 만족하는 맵이 없습니다.")
+        for lb, values in candidates[:8]:
             song, author, stars = songs[lb]
-            print(f"  {pp:6.1f}pp  {stars:5.2f}* {song} ({author})  "
-                  f"https://scoresaber.com/leaderboard/{lb}")
+            pp_values = [pp for _, pp in values]
+            print(f"  {len(values)}/{len(compared)}명  "
+                  f"{min(pp_values):.1f}-{max(pp_values):.1f}pp  "
+                  f"{stars:5.2f}* {song} ({author}) [lb:{lb}]")
 
         pl = next((a for a in sys.argv if a.startswith("--playlist=")), None)
         if pl:
-            # farm picks: union of top-3 similar users' unplayed maps, by pp
-            best = {}
-            for _, _, q in out[:3]:
-                for lb, w in vecs[q["id"]].items():
-                    if lb not in tv:
-                        best[lb] = max(best.get(lb, 0), w)
-            picks = sorted(best, key=lambda lb: -best[lb])[:20]
+            picks = [lb for lb, _ in candidates[:20]]
             write_playlist(pl.split("=", 1)[1],
                            f"Farm picks for {target['name']}", picks, songs)
 

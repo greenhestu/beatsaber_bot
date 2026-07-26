@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""BeatLeader variant: top-240 score lists for ranked maps with 9 <= stars <= 11.
+"""BeatLeader variant: top-240 score lists for the highest-star ranked maps.
 
 BeatLeader rate limit is 50 req / 10 s (x-rate-limit headers); we pace at
-40 req / 10 s. count=100 is supported, so each map needs <= 3 pages.
+40 req / 10 s by default. count=100 is supported, so each map needs <= 3 pages.
 
   python3 fetch_bl.py            # catalog + scores in one go (resumable)
 """
@@ -18,11 +18,12 @@ BASE = "https://api.beatleader.xyz"
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 CATALOG_FILE = os.path.join(DATA, "bl_leaderboards.json")
 SCORES_FILE = os.path.join(DATA, "bl_map_scores.jsonl")
-MIN_STAR, MAX_STAR = 10.0, 12.0
-TOP_N = 240
+MAP_LIMIT = int(os.environ.get("BL_MAPS_MAP_LIMIT", "3600"))
+TOP_N = int(os.environ.get("BL_MAPS_TOP_N", "240"))
 PER_PAGE = 100
-RATE_MAX, RATE_WINDOW = 40, 10.0  # 40 req / 10 s (server allows 50)
-WORKERS = 6
+RATE_MAX = int(os.environ.get("BL_MAPS_RATE_MAX", "20"))
+RATE_WINDOW = float(os.environ.get("BL_MAPS_RATE_WINDOW", "10.0"))
+WORKERS = int(os.environ.get("BL_MAPS_WORKERS", "6"))
 
 _lock = threading.Lock()
 _req_times = []
@@ -71,7 +72,7 @@ def fetch_catalog():
     lbs, page = [], 1
     while True:
         d = get("/leaderboards", {"page": page, "count": 100, "type": "ranked",
-                                  "stars_from": MIN_STAR, "stars_to": MAX_STAR})
+                                  "sortBy": "stars", "order": "desc"})
         items = d["data"]
         if not items:
             break
@@ -87,11 +88,17 @@ def fetch_catalog():
                 "acc_rating": df.get("accRating"), "pass_rating": df.get("passRating"),
                 "tech_rating": df.get("techRating"),
             })
+            if len(lbs) >= MAP_LIMIT:
+                break
+        if len(lbs) >= MAP_LIMIT:
+            break
         if len(lbs) >= d["metadata"]["total"]:
             break
         page += 1
     json.dump(lbs, open(CATALOG_FILE, "w"))
-    print(f"BL catalog: {len(lbs)} ranked maps {MIN_STAR}-{MAX_STAR}*", flush=True)
+    print(f"BL catalog: {len(lbs)} highest-star ranked maps", flush=True)
+    if lbs:
+        print(f"BL selected star range: {lbs[-1]['stars']:.2f}* - {lbs[0]['stars']:.2f}*", flush=True)
     return lbs
 
 

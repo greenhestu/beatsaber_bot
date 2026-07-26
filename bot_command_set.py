@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 import os
 Url="https://scoresaber.com/global"
 scurl = "https://scoresaber.com/u/"
-newsclink = 'https://new.scoresaber.com/api/player/'
+scoresaber_api = 'https://scoresaber.com/api/player/'
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 path =os.path.join(DIR_PATH, "data/PP_text/") 
@@ -67,13 +67,15 @@ def regist(did, address):
 '''
 #슼세가 유효한가
 def validcheck(userlink):
-	link = newsclink+str(userlink)+'/basic'
-	source = requests.get(link)
-	element_list = str(source.text).split(':')
-	if(len(element_list) < 4):
+	link = scoresaber_api+str(userlink)+'/basic'
+	try:
+		source = requests.get(link, timeout=10)
+		if source.status_code != 200:
+			return False
+		data = source.json()
+	except Exception:
 		return False	
-	name = element_list[3].split(',')[0].strip().strip('"')
-	return name
+	return data.get('name', False)
 #등록된 유저인가
 def diccheck(discordid):
 	if discordid in did_sc:
@@ -343,13 +345,15 @@ def embeddata(discordid):
 		return "notregist"
 	date = datetime.datetime.now()
 	userlink = did_sc[discordid]
-	link = 'https://new.scoresaber.com/api/player/'+str(userlink)+'/full'
+	link = scoresaber_api+str(userlink)+'/full'
 	try:
-	    source = requests.get(link)
-	    source = source.text
+	    source = requests.get(link, timeout=10)
+	    if source.status_code != 200:
+	    	return "scoresabererror"
+	    source = source.json()
 	except: 
 		return "scoresabererror"
-	country = str(source).split('"country": ')[1].split(",")[0].strip('"')
+	country = source.get('country', '')
 	dataformat = []
 	if country == "KR":
 		dataformat = kordataformet[:]
@@ -358,13 +362,14 @@ def embeddata(discordid):
 	else:
 		dataformat = engdataformet[:]
 
-	Name = source.split('"playerName": ')[1].split(",")[0].strip('"')
-	GlobalRank = source.split('"rank": ')[1].split(",")[0]
-	CountryRank = source.split('"countryRank": ')[1].split(",")[0]
-	PP = source.split('"pp": ')[1].split(",")[0]
-	ImageLink = source.split('"avatar": ')[1].split(",")[0].strip('"')
-	AvgRankAcc = source.split('"averageRankedAccuracy": ')[1].split(",")[0]
-	TotalPlayCount = source.split('"totalPlayCount": ')[1].split(",")[0]
+	Name = str(source.get('name', 'Unknown'))
+	GlobalRank = str(source.get('rank', '?'))
+	CountryRank = str(source.get('countryRank', '?'))
+	PP = str(source.get('pp', 0))
+	ImageLink = source.get('profilePicture') or "/images/oculus.png"
+	score_stats = source.get('scoreStats') or {}
+	AvgRankAcc = score_stats.get('averageRankedAccuracy', 0)
+	TotalPlayCount = str(score_stats.get('totalPlayCount', '?'))
 
 	dataformat[0] = Name
 	dataformat[1] = ImageLink

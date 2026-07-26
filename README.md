@@ -36,6 +36,9 @@ discord.py 2.x 기반. 입력하면 Discord가 파라미터 힌트를 띄워주�
 | `!곡추천 <리더보드 주소\|id> [개수]` | `!rec` | ScoreSaber 랭크곡 추천 — 리더보드 유저 서열이 유사한 곡 + 플레이리스트 파일 |
 | `!블곡추천 <리더보드 주소\|id> [개수]` | `!blrec` | BeatLeader 랭크곡 추천 (위와 동일 방식) + 플레이리스트 파일 |
 | `!유저추천 [스코어세이버 주소] [개수]` | `!urec` | 나(또는 지정 유저)보다 pp 높은 유저 중 top곡 구성이 비슷한 유저 + farm 후보곡 플레이리스트 |
+| `!유저정보갱신 [전적\|추천\|전체]` | `!유저갱신` | 유저 PP 기록 또는 ScoreSaber 유저 추천 데이터를 백그라운드에서 최신화 (관리 권한 필요) |
+| `!맵정보갱신 [전체\|ss\|bl]` | `!맵갱신` | ScoreSaber/BeatLeader 맵 추천 데이터를 백그라운드에서 최신화 (관리 권한 필요) |
+| `!갱신상태` | `!updatestatus` | 추천 데이터 갱신 작업 실행 상태와 최근 로그 확인 (관리 권한 필요) |
 
 ## 구조
 
@@ -88,8 +91,9 @@ python3 discord_bot.py
 등장하는 유저들의 순위 순서가 얼마나 일치하는가"(Spearman 순위상관 + 실력
 효과를 제거한 잔차 상관)로 유사도를 계산한다 — 같은 부류(acc형/연타형/테크형)
 유저가 상위권에 오는 곡끼리 묶인다. 유저 추천은 top-100 pp곡을 위치 가중
-(0.965^i) cosine으로 비교해, 나보다 pp 높은 유저 중 베스트 곡 구성이 가장
-비슷한 유저와 그 유저의 farm 곡(내가 아직 안 친 고pp 곡)을 보여준다.
+(0.965^i) cosine으로 비교해 나보다 pp 높은 유사 유저 목록을 보여준다.
+Farm picks는 그중 2명 이상에게 반복 등장하고, 해당 비교 유저 모두가 내
+ScoreSaber `+1PP` 기준보다 높은 raw PP를 기록한 곡만 추천한다.
 
 ```
 recommend/
@@ -100,7 +104,7 @@ recommend/
 
 추천 명령은 결과 텍스트와 함께 **`.bplist` 플레이리스트 파일을 첨부**한다
 (PlaylistManager 등 호환 — 곡추천은 타깃곡+추천곡, 유저추천은 유사 유저
-상위 3명의 farm 후보곡 최대 20개). 받은 파일을 `Beat Saber/Playlists/`에
+여러 유사 유저에게 반복되는 farm 후보곡 최대 20개). 받은 파일을 `Beat Saber/Playlists/`에
 넣으면 게임에서 바로 쓸 수 있다.
 
 ### 데이터 준비 (최초 1회 + 주기 갱신)
@@ -115,6 +119,10 @@ cd recommend/ss_maps  && python3 fetch.py catalog && python3 fetch.py scores  # 
 cd recommend/bl_maps  && python3 fetch.py                                     # ~9분
 cd recommend/ss_users && python3 fetch.py                                     # ~9분
 ```
+
+봇 안에서는 관리 권한이 있는 유저가 `!유저정보갱신 전적`, `!유저정보갱신 추천`,
+`!맵정보갱신`을 실행해 같은 수집 작업을 백그라운드로 시작할 수 있다.
+로그와 pid 파일은 `recommend/update_jobs/` 아래에 저장되며, `!갱신상태`로 확인한다.
 
 수집 범위(별 구간, 인원수)와 유사도 산식 세부는 `recommend/README.md` 참고.
 갱신 주기는 주 1회면 충분하다 (갱신 시 기존 `data/*.jsonl` 삭제 후 재수집).

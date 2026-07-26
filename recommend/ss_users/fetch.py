@@ -2,11 +2,13 @@
 """ScoreSaber user classification — data fetch.
 
 Top 3000 global players, and each player's top-100 pp scores (1 call/player).
-~3060 calls total, paced at 370 req/min (< 400/min limit). Resumable.
+~3060 calls total by default, paced conservatively below the public 400 req/min
+limit. Resumable.
 
   python3 fetch.py
 """
 import json
+import math
 import os
 import threading
 import time
@@ -18,9 +20,10 @@ BASE = "https://scoresaber.com/api"
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 PLAYERS_FILE = os.path.join(DATA, "players.json")
 SCORES_FILE = os.path.join(DATA, "top_scores.jsonl")
-N_PLAYERS = 3000
-RATE_PER_MIN = 370
-WORKERS = 8
+N_PLAYERS = int(os.environ.get("SS_USERS_N_PLAYERS", "3000"))
+TOP_SCORES = int(os.environ.get("SS_USERS_TOP_SCORES", "100"))
+RATE_PER_MIN = int(os.environ.get("SS_USERS_RATE_PER_MIN", "180"))
+WORKERS = int(os.environ.get("SS_USERS_WORKERS", "4"))
 
 _lock = threading.Lock()
 _req_times = []
@@ -67,20 +70,23 @@ def fetch_players():
     if os.path.exists(PLAYERS_FILE):
         return json.load(open(PLAYERS_FILE))
     players = []
-    for page in range(1, N_PLAYERS // 50 + 1):
+    pages = math.ceil(N_PLAYERS / 50)
+    for page in range(1, pages + 1):
         d = get("/players", {"page": page})
         for p in d["players"]:
+            if len(players) >= N_PLAYERS:
+                break
             players.append({"id": p["id"], "name": p["name"], "rank": p["rank"],
                             "pp": p["pp"], "country": p["country"]})
         if page % 10 == 0:
-            print(f"players page {page}/{N_PLAYERS // 50}", flush=True)
+            print(f"players page {page}/{pages}", flush=True)
     json.dump(players, open(PLAYERS_FILE, "w"))
     return players
 
 
 def fetch_top100(player):
     d = get(f"/player/{player['id']}/scores",
-            {"sort": "top", "limit": 100, "page": 1})
+            {"sort": "top", "limit": TOP_SCORES, "page": 1})
     rows = []
     for ps in (d or {}).get("playerScores") or []:
         s, lb = ps["score"], ps["leaderboard"]

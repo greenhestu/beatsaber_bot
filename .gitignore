@@ -1,9 +1,14 @@
 token.txt
+.env
 history.csv
 graph.png
 nohup.out
+*.log
+logs/
 __pycache__
 /data
 recommend/*/data/
+recommend/*/data.backup-*/
 recommend/*/__pycache__/
+recommend/update_jobs/
 *.bplist

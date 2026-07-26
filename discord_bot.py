@@ -13,7 +13,7 @@
 '''
 from bot_command_set import *
 from discord.ext import commands
-import discord, asyncio, re, os
+import discord, asyncio, re, os, shlex, subprocess, time
 #from selenium import webdriver
 
 SCORESABER_USER_ID_MIN = 10 ##스코어세이버 주소 10자리는 넘겠지?
@@ -25,8 +25,10 @@ number = 0
 ENCODING = 'utf-8'
 
 DIR_PATH = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(DIR_PATH,'token.txt'),'r', encoding=ENCODING) as text:
-    TOKEN = text.readlines()[0].split("#")[0] #첫번째 줄 #빼고 token으로 사용
+TOKEN = os.environ.get("DISCORD_TOKEN")
+if not TOKEN:
+    with open(os.path.join(DIR_PATH,'token.txt'),'r', encoding=ENCODING) as text:
+        TOKEN = text.readlines()[0].split("#")[0] #첫번째 줄 #빼고 token으로 사용
 
 import slash_commands
 slash_commands.setup(bot) # /info, /recommend (버튼 UI는 slash_commands.py)
@@ -183,8 +185,10 @@ async def 내_정보(ctx):
     		description+=listdata[i]
     	if listdata[1] == "/images/oculus.png":
     		imageurl= "https://scoresaber.com/imports/images/oculus.png"
+    	elif listdata[1].startswith("http"):
+    		imageurl = listdata[1]
     	else:
-    		imageurl = "https://new.scoresaber.com"+listdata[1]
+    		imageurl = "https://scoresaber.com"+listdata[1]
 
     	embed=discord.Embed(title=listdata[0]+"'s profile", url="https://scoresaber.com/u/"+listdata[2],description= description,color=0x00ff56)
     	embed.set_thumbnail(url=imageurl)
@@ -205,8 +209,10 @@ async def 타_정보(ctx, player):
     		description+=listdata[i]
     	if listdata[1] == "/images/oculus.png":
     		imageurl= "https://scoresaber.com/imports/images/oculus.png"
+    	elif listdata[1].startswith("http"):
+    		imageurl = listdata[1]
     	else:
-   			imageurl = "https://new.scoresaber.com"+listdata[1]
+   			imageurl = "https://scoresaber.com"+listdata[1]
     	embed=discord.Embed(title=listdata[0]+"'s profile", url="https://scoresaber.com/u/"+listdata[2],description= description,color=0x00ff56)
     	embed.set_thumbnail(url=imageurl)
     	await ctx.send(embed= embed)
@@ -309,6 +315,230 @@ async def 비교하기(ctx):
 #------------------------------------------------------------------------------------------------
 # 곡/유저 추천 (recommend/ — 리더보드 topology 기반, 자세한 건 recommend/README.md)
 RECOMMEND_DIR = os.path.join(DIR_PATH, 'recommend')
+UPDATE_DIR = os.path.join(RECOMMEND_DIR, 'update_jobs')
+UPDATE_LOG_DIR = os.path.join(UPDATE_DIR, 'logs')
+
+UPDATE_JOB_STEPS = {
+    'users': {
+        'label': 'ScoreSaber 유저 PP 기록',
+        'steps': [
+            (DIR_PATH, ['python3', 'kr_ranker.py']),
+            (DIR_PATH, ['python3', 'added_user.py']),
+        ],
+    },
+    'user_recommend': {
+        'label': 'ScoreSaber 유저 추천 데이터',
+        'steps': [
+            (os.path.join(RECOMMEND_DIR, 'ss_users'), ['python3', 'fetch.py']),
+        ],
+    },
+    'users_all': {
+        'label': 'ScoreSaber 유저 PP 기록+추천 데이터',
+        'steps': [
+            (DIR_PATH, ['python3', 'kr_ranker.py']),
+            (DIR_PATH, ['python3', 'added_user.py']),
+            (os.path.join(RECOMMEND_DIR, 'ss_users'), ['python3', 'fetch.py']),
+        ],
+    },
+    'ss_maps': {
+        'label': 'ScoreSaber 맵 추천 데이터',
+        'steps': [
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'catalog']),
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'scores']),
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'scores-rest-page1']),
+        ],
+    },
+    'bl_maps': {
+        'label': 'BeatLeader 맵 추천 데이터',
+        'steps': [
+            (os.path.join(RECOMMEND_DIR, 'bl_maps'), ['python3', 'fetch.py']),
+        ],
+    },
+    'maps_all': {
+        'label': 'ScoreSaber+BeatLeader 맵 추천 데이터',
+        'steps': [
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'catalog']),
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'scores']),
+            (os.path.join(RECOMMEND_DIR, 'ss_maps'), ['python3', 'fetch.py', 'scores-rest-page1']),
+            (os.path.join(RECOMMEND_DIR, 'bl_maps'), ['python3', 'fetch.py']),
+        ],
+    },
+}
+
+USER_UPDATE_ALIASES = {
+    '': 'users',
+    'pp': 'users',
+    'record': 'users',
+    'records': 'users',
+    '전적': 'users',
+    '기록': 'users',
+    '추천': 'user_recommend',
+    'recommend': 'user_recommend',
+    'rec': 'user_recommend',
+    '전체': 'users_all',
+    '모두': 'users_all',
+    'all': 'users_all',
+}
+
+MAP_UPDATE_ALIASES = {
+    '': 'maps_all',
+    'all': 'maps_all',
+    'both': 'maps_all',
+    '전체': 'maps_all',
+    '모두': 'maps_all',
+    'ss': 'ss_maps',
+    'scoresaber': 'ss_maps',
+    '스코어세이버': 'ss_maps',
+    'bl': 'bl_maps',
+    'beatleader': 'bl_maps',
+    '비트리더': 'bl_maps',
+}
+
+def update_pid_path(job_key):
+    return os.path.join(UPDATE_DIR, f'{job_key}.pid')
+
+def pid_is_running(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (ValueError, ProcessLookupError):
+        return False
+    except PermissionError:
+        return True
+
+def running_update_job(job_key):
+    try:
+        with open(update_pid_path(job_key), 'r', encoding=ENCODING) as f:
+            pid = f.read().strip()
+    except FileNotFoundError:
+        return None
+    return pid if pid_is_running(pid) else None
+
+def map_job_conflicts(job_key):
+    user_jobs = ['users', 'user_recommend', 'users_all']
+    if job_key in user_jobs:
+        return user_jobs
+    if job_key == 'maps_all':
+        return ['maps_all', 'ss_maps', 'bl_maps']
+    if job_key in ('ss_maps', 'bl_maps'):
+        return ['maps_all', job_key]
+    return [job_key]
+
+def latest_update_log(job_key):
+    try:
+        names = [
+            name for name in os.listdir(UPDATE_LOG_DIR)
+            if name.startswith(job_key + '-') and name.endswith('.log')
+        ]
+    except FileNotFoundError:
+        return None
+    if not names:
+        return None
+    return max(
+        (os.path.join(UPDATE_LOG_DIR, name) for name in names),
+        key=lambda path: os.path.getmtime(path),
+    )
+
+def make_update_script(job_key):
+    job = UPDATE_JOB_STEPS[job_key]
+    lines = [
+        'set -euo pipefail',
+        f'echo "== {job["label"]} update started: $(date -Is) =="',
+    ]
+    for cwd, cmd in job['steps']:
+        lines.append(f'echo "== {cwd}: {" ".join(cmd)} =="')
+        lines.append(f'cd {shlex.quote(cwd)}')
+        lines.append(' '.join(shlex.quote(part) for part in cmd))
+    lines.append('echo "== update complete: $(date -Is) =="')
+    return '\n'.join(lines) + '\n'
+
+def start_update_job(job_key):
+    os.makedirs(UPDATE_LOG_DIR, exist_ok=True)
+    timestamp = time.strftime('%Y%m%d-%H%M%S')
+    log_path = os.path.join(UPDATE_LOG_DIR, f'{job_key}-{timestamp}.log')
+    open(log_path, 'a', encoding=ENCODING).close()
+    launcher = (
+        f'setsid bash -lc {shlex.quote(make_update_script(job_key))} '
+        f'>> {shlex.quote(log_path)} 2>&1 < /dev/null & echo $!'
+    )
+    proc = subprocess.run(
+        ['bash', '-lc', launcher],
+        cwd=RECOMMEND_DIR,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    pid = proc.stdout.strip().splitlines()[-1]
+    with open(update_pid_path(job_key), 'w', encoding=ENCODING) as f:
+        f.write(pid)
+    return pid, log_path
+
+async def 갱신권한확인(ctx):
+    perms = getattr(ctx.author, 'guild_permissions', None)
+    if perms and (perms.manage_guild or perms.administrator):
+        return True
+    try:
+        if await bot.is_owner(ctx.author):
+            return True
+    except Exception:
+        pass
+    await ctx.send('이 명령어는 서버 관리 권한이 있는 유저만 실행할 수 있습니다.')
+    return False
+
+async def 추천데이터_갱신(ctx, job_key):
+    for key in map_job_conflicts(job_key):
+        pid = running_update_job(key)
+        if pid:
+            await ctx.send(
+                f'이미 `{UPDATE_JOB_STEPS[key]["label"]}` 갱신이 실행 중입니다. '
+                f'pid={pid}'
+            )
+            return
+    pid, log_path = start_update_job(job_key)
+    await ctx.send(
+        f'`{UPDATE_JOB_STEPS[job_key]["label"]}` 갱신을 백그라운드에서 시작했습니다.\n'
+        f'pid={pid}\n'
+        f'로그: `{log_path}`'
+    )
+
+def 갱신상태문구():
+    lines = []
+    for key, job in UPDATE_JOB_STEPS.items():
+        pid = running_update_job(key)
+        log_path = latest_update_log(key)
+        status = f'실행 중 pid={pid}' if pid else '실행 중 아님'
+        if log_path:
+            mtime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(os.path.getmtime(log_path)))
+            status += f', 최근 로그={os.path.basename(log_path)} ({mtime})'
+        lines.append(f'- {job["label"]}: {status}')
+    return '\n'.join(lines)
+
+@bot.command(aliases=['UPDATEUSERS','updateusers','유저갱신','유저정보업데이트','유저추천데이터갱신'])
+async def 유저정보갱신(ctx, kind='전적'):
+    if not await 갱신권한확인(ctx):
+        return
+    job_key = USER_UPDATE_ALIASES.get(str(kind).strip().lower())
+    if job_key is None:
+        await ctx.send('범위는 `전적`, `추천`, `전체` 중 하나로 입력해주세요. 예: `!유저정보갱신 전적`')
+        return
+    await 추천데이터_갱신(ctx, job_key)
+
+@bot.command(aliases=['UPDATEMAPS','updatemaps','맵갱신','맵정보업데이트'])
+async def 맵정보갱신(ctx, platform='all'):
+    if not await 갱신권한확인(ctx):
+        return
+    job_key = MAP_UPDATE_ALIASES.get(str(platform).strip().lower())
+    if job_key is None:
+        await ctx.send('플랫폼은 `전체`, `ss`, `bl` 중 하나로 입력해주세요. 예: `!맵정보갱신 ss`')
+        return
+    await 추천데이터_갱신(ctx, job_key)
+
+@bot.command(aliases=['UPDATESTATUS','updatestatus'])
+async def 갱신상태(ctx):
+    if not await 갱신권한확인(ctx):
+        return
+    await ctx.send('```\n' + 갱신상태문구() + '\n```')
 
 async def 추천실행(tool, target, num, playlist_path=None):
     '''recommend/<tool>/similar.py를 실행해 출력을 받아온다 (로컬 DB만 읽음, API 호출 없음)'''
